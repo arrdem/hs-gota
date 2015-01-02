@@ -1,8 +1,8 @@
 {-# LANGUAGE DataKinds #-}
-import Data.Maybe
-import Data.Either
 import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
+import Data.Aeson
+import qualified Data.ByteString as ByteString
+import qualified Data.ByteString.Lazy as ByteString.Lazy
 
 
 
@@ -87,18 +87,18 @@ p2 = ["Pudge", "Sniper", "Meepo", "Oracle",      "Spirit Breaker"]
 p3 = ["Lina",  "Clinx",  "Bane",  "Dazzle",      "Bristleback"]
 
 g1 = (Game
-      (Map.fromList (zipWith (,) coolKids p1))
-      (Map.fromList (zipWith (,) pugs     p2))
+      (Map.fromList (zip coolKids p1))
+      (Map.fromList (zip pugs     p2))
       Radiant)
 
 g2 = (Game
-      (Map.fromList (zipWith (,) coolKids p1))
-      (Map.fromList (zipWith (,) pugs     p1))
+      (Map.fromList (zip coolKids p1))
+      (Map.fromList (zip pugs     p1))
       Dire)
 
 g3 = (Game
-      (Map.fromList (zipWith (,) coolKids p3))
-      (Map.fromList (zipWith (,) pugs     p2))
+      (Map.fromList (zip coolKids p3))
+      (Map.fromList (zip pugs     p2))
       Radiant)
 
 
@@ -120,8 +120,7 @@ mergeACCs l r =
 type Leaf = (Map.Map String AccValue)
 
 mergeLeafs :: Leaf -> Leaf -> Leaf
-mergeLeafs l r =
-  Map.unionWith mergeACCs l r
+mergeLeafs = Map.unionWith mergeACCs
 
 leafFromHeros :: [String] -> [String] -> Int -> Leaf
 leafFromHeros as bs c =
@@ -144,5 +143,10 @@ dbFromLeaf l =
            l)
 
 dbFromList :: [Game] -> HeroDB
-dbFromList games = -- FIXME: this is trivially parallelizable
-  (dbFromLeaf . (foldr mergeLeafs Map.empty) . (concatMap gameToLeafs)) games
+dbFromList = -- FIXME: this is trivially parallelizable
+  dbFromLeaf . foldr mergeLeafs Map.empty . concatMap gameToLeafs
+
+
+
+main =
+  ByteString.putStr (ByteString.Lazy.toStrict (encode (dbFromList testGameHistories)))
