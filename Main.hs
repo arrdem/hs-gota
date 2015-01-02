@@ -1,15 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 import qualified Data.Map.Strict as Map
 import Data.Aeson
+import Data.Maybe (fromMaybe)
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Lazy as ByteString.Lazy
-
-
-
-myFirstMaybe :: Maybe Int -> String
-myFirstMaybe mt = case mt of
-  Nothing -> "Nothing!"
-  Just t  -> "Something! " ++ (show t)
 
 
 
@@ -35,11 +29,8 @@ valueAgainst :: HeroDB -> String -> String -> Float
 valueAgainst db us them =
   let maybeRating = Map.lookup us db
   in (case maybeRating of
-       Just ratings -> (let maybeScore = Map.lookup them ratings
-                        in
-                         case maybeScore of
-                          Just x  -> x
-                          Nothing -> 2.5)
+       Just ratings -> let maybeScore = Map.lookup them ratings in
+                        fromMaybe 2.5 maybeScore
        Nothing    -> 2.5)
 
 
@@ -48,7 +39,7 @@ data RadiantOrDire = Radiant | Dire deriving (Show, Eq)
 
 data Player =
   Player {
-      steam_id :: String
+      steamId :: String
     } deriving (Show, Eq)
 
 instance Ord Player where
@@ -86,20 +77,20 @@ p1 = ["Axe",   "Clinx",  "Bane",  "Witchdoctor", "Sven"]
 p2 = ["Pudge", "Sniper", "Meepo", "Oracle",      "Spirit Breaker"]
 p3 = ["Lina",  "Clinx",  "Bane",  "Dazzle",      "Bristleback"]
 
-g1 = (Game
+g1 = Game
       (Map.fromList (zip coolKids p1))
       (Map.fromList (zip pugs     p2))
-      Radiant)
+      Radiant
 
-g2 = (Game
+g2 = Game
       (Map.fromList (zip coolKids p1))
       (Map.fromList (zip pugs     p1))
-      Dire)
+      Dire
 
-g3 = (Game
+g3 = Game
       (Map.fromList (zip coolKids p3))
       (Map.fromList (zip pugs     p2))
-      Radiant)
+      Radiant
 
 
 -- Lina is totally OP. Totally. Not fixing these stats at all. Nope. Why would you say that.
@@ -114,7 +105,7 @@ data AccValue =
 
 mergeACCs :: AccValue -> AccValue -> AccValue
 mergeACCs l r =
-  AccValue ((games l) + (games r))
+  AccValue ((+) (games l) (games r))
            (Map.unionWith (+) (record l) (record r))
 
 type Leaf = (Map.Map String AccValue)
@@ -125,28 +116,27 @@ mergeLeafs = Map.unionWith mergeACCs
 leafFromHeros :: [String] -> [String] -> Int -> Leaf
 leafFromHeros as bs c =
   let inner_map = Map.fromList (map (\x -> (x, c)) bs)
-  in Map.fromList (map (\y -> (y, (AccValue 1 inner_map))) as)
+  in Map.fromList (map (\y -> (y, AccValue 1 inner_map)) as)
 
 gameToLeafs :: Game -> [Leaf]
 gameToLeafs game =
-  let (rs, ds) = (if ((victor game) == Radiant)
+  let (rs, ds) = (if victor game == Radiant
                   then (5,0) else (0,5))
       rHeros = Map.elems (radiant game)
       dHeros = Map.elems (dire game)
-  in [(leafFromHeros rHeros dHeros rs),
-      (leafFromHeros dHeros rHeros ds)]
+  in [leafFromHeros rHeros dHeros rs,
+      leafFromHeros dHeros rHeros ds]
 
 dbFromLeaf :: Leaf -> HeroDB
-dbFromLeaf l =
-  (Map.map (\x -> Map.map (\y -> ((fromIntegral y) / (fromIntegral (games x))))
-                          (record x))
-           l)
+dbFromLeaf =
+  Map.map (\x -> Map.map (\y -> fromIntegral y / fromIntegral (games x))
+                 (record x))
 
 dbFromList :: [Game] -> HeroDB
 dbFromList = -- FIXME: this is trivially parallelizable
   dbFromLeaf . foldr mergeLeafs Map.empty . concatMap gameToLeafs
 
 
-
+main :: IO ()
 main =
   ByteString.putStr (ByteString.Lazy.toStrict (encode (dbFromList testGameHistories)))
